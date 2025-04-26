@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    .image-container {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      padding: 10px;
+      display: inline-block;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    .info {
+      margin-bottom: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>Image Viewer</h1>
+  <div class="info">Displaying image from base64 data</div>
+  <div id="error-message" class="error" style="display: none;"></div>
+  <div id="image-container" class="image-container">
+    <img id="display-image" alt="Base64 Image">
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const params = new URLSearchParams(window.location.search);
+      const imageId = params.get('id');
+      
+      if (!imageId) {
+        showError('No image ID provided');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/image/${imageId}`);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          showError(`Error: ${errorData.error || 'Failed to load image'}`);
+          return;
+        }
+        
+        const imageData = await response.json();
+        const img = document.getElementById('display-image');
+        
+        // Set the image dimensions if provided
+        if (imageData.width) img.style.width = isNaN(imageData.width) ? imageData.width : `${imageData.width}px`;
+        if (imageData.height) img.style.height = isNaN(imageData.height) ? imageData.height : `${imageData.height}px`;
+        
+        // Set the image source to the base64 data
+        img.src = imageData.data.startsWith('data:') ? imageData.data : `data:image/png;base64,${imageData.data}`;
+        
+        // Add timestamp info
+        const infoDiv = document.querySelector('.info');
+        infoDiv.innerHTML += `<br>Uploaded: ${new Date(imageData.timestamp).toLocaleString()}`;
+      } catch (error) {
+        showError(`Error: ${error.message}`);
+      }
+    });
+    
+    function showError(message) {
+      const errorElement = document.getElementById('error-message');
+      errorElement.textContent = message;
+      errorElement.style.display = 'block';
+      document.getElementById('image-container').style.display = 'none';
+    }
+  </script>
+</body>
+</html> 

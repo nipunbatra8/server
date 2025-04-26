@@ -252,6 +252,53 @@ app.post('/', (req, res) => {
   });
 });
 
+// Handle base64 image data and display it
+app.post('/api/display-image', (req, res) => {
+  const { width, height, data } = req.body;
+  
+  console.log('Received image data:');
+  console.log('Width:', width);
+  console.log('Height:', height);
+  console.log('Base64 data length:', data ? data.length : 0);
+  
+  if (!data) {
+    return res.status(400).json({ error: 'Missing required parameter: data (base64 image)' });
+  }
+  
+  // Generate a unique ID for this image
+  const imageId = Date.now().toString();
+  
+  // Store the image data temporarily
+  dataStore[`image_${imageId}`] = {
+    width: width || 'auto',
+    height: height || 'auto',
+    data,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Redirect to the HTML page that will display the image
+  res.status(200).json({ 
+    success: true, 
+    imageId,
+    viewUrl: `${req.protocol}://${req.get('host')}/view-image.html?id=${imageId}`
+  });
+});
+
+// API endpoint to get the stored image data
+app.get('/api/image/:id', (req, res) => {
+  const { id } = req.params;
+  const imageData = dataStore[`image_${id}`];
+  
+  if (!imageData) {
+    return res.status(404).json({ error: 'Image not found' });
+  }
+  
+  res.status(200).json(imageData);
+});
+
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
