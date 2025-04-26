@@ -237,6 +237,21 @@ app.get('/api/data/:key', (req, res) => {
   res.status(200).json({ key, value: dataStore[key] });
 });
 
+// Generic handler for POST requests to the root path
+app.post('/', (req, res) => {
+  console.log('POST request received at root path:');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  
+  res.status(200).json({ 
+    message: 'Root POST request received',
+    receivedData: {
+      headers: req.headers,
+      body: req.body
+    }
+  });
+});
+
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
