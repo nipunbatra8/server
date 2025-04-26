@@ -198,8 +198,26 @@ app.get('/api/forecast', (req, res) => {
 // Generic data storage endpoint example
 const dataStore = {};
 
+// New endpoint to log POST requests
+app.post('/api/log-post', (req, res) => {
+  console.log('POST request received:');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  
+  res.status(200).json({ 
+    message: 'Request logged successfully',
+    receivedData: {
+      headers: req.headers,
+      body: req.body
+    }
+  });
+});
+
 app.post('/api/data', (req, res) => {
   const { key, value } = req.body;
+  
+  // Log all POST requests to this endpoint
+  console.log('POST to /api/data:', { key, value, fullBody: req.body });
   
   if (!key || value === undefined) {
     return res.status(400).json({ error: 'Both key and value are required' });
