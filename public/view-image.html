@@ -26,25 +26,6 @@
       margin-bottom: 20px;
       color: #666;
     }
-    .analysis {
-      margin-top: 20px;
-      padding: 15px;
-      background-color: #f9f9f9;
-      border-radius: 5px;
-      text-align: left;
-      max-width: 800px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .analysis-title {
-      font-weight: bold;
-      margin-bottom: 10px;
-      color: #333;
-    }
-    .loading {
-      font-style: italic;
-      color: #888;
-    }
   </style>
 </head>
 <body>
@@ -53,11 +34,6 @@
   <div id="error-message" class="error" style="display: none;"></div>
   <div id="image-container" class="image-container">
     <img id="display-image" alt="Base64 Image">
-  </div>
-  
-  <div id="analysis-container" class="analysis">
-    <div class="analysis-title">AI Analysis:</div>
-    <div id="analysis-content" class="loading">Loading analysis...</div>
   </div>
   
   <script>
@@ -92,58 +68,16 @@
         // Add timestamp info
         const infoDiv = document.querySelector('.info');
         infoDiv.innerHTML += `<br>Uploaded: ${new Date(imageData.timestamp).toLocaleString()}`;
-        
-        // Display analysis if available
-        const analysisContent = document.getElementById('analysis-content');
-        if (imageData.analysis) {
-          analysisContent.textContent = imageData.analysis;
-          analysisContent.classList.remove('loading');
-        } else {
-          analysisContent.textContent = 'Analyzing image...';
-          // Poll for analysis updates
-          pollForAnalysis(imageId);
-        }
       } catch (error) {
         showError(`Error: ${error.message}`);
       }
     });
-    
-    async function pollForAnalysis(imageId) {
-      try {
-        const response = await fetch(`/api/image/${imageId}/analysis`);
-        if (!response.ok) {
-          throw new Error('Failed to get analysis');
-        }
-        
-        const data = await response.json();
-        const analysisElement = document.getElementById('analysis-content');
-        
-        if (analysisElement) {
-          // Update the analysis text
-          analysisElement.textContent = data.analysis;
-          analysisElement.classList.remove('loading');
-          
-          // If still analyzing, poll again after a delay
-          if (data.analysis === 'Analyzing image...') {
-            setTimeout(() => pollForAnalysis(imageId), 3000);
-          }
-        }
-      } catch (error) {
-        console.error(`Error polling for analysis:`, error);
-        const analysisElement = document.getElementById('analysis-content');
-        if (analysisElement) {
-          analysisElement.textContent = `Error getting analysis: ${error.message}`;
-          analysisElement.classList.remove('loading');
-        }
-      }
-    }
     
     function showError(message) {
       const errorElement = document.getElementById('error-message');
       errorElement.textContent = message;
       errorElement.style.display = 'block';
       document.getElementById('image-container').style.display = 'none';
-      document.getElementById('analysis-container').style.display = 'none';
     }
   </script>
 </body>
