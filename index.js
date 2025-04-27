@@ -4,23 +4,17 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
-const { OpenAI } = require('openai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json({ limit: '3gb' }));
-app.use(express.urlencoded({ extended: true, limit: '3gb' }));
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files from the images directory
 app.use('/images', express.static(path.join(__dirname, 'images')));
-
-// Initialize OpenAI client - will use environment variable OPENAI_API_KEY
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // This will be loaded from your .env file
-});
 
 // Simple health check endpoint
 app.get('/health', (req, res) => {
@@ -258,8 +252,8 @@ app.post('/', (req, res) => {
   });
 });
 
-// Modify the display-image endpoint to include image analysis
-app.post('/api/display-image', async (req, res) => {
+// Handle base64 image data and display it
+app.post('/api/display-image', (req, res) => {
   const { width, height, data } = req.body;
   
   console.log('Received image data:');
@@ -279,85 +273,14 @@ app.post('/api/display-image', async (req, res) => {
     width: width || 'auto',
     height: height || 'auto',
     data,
-    timestamp: new Date().toISOString(),
-    analysis: 'Analyzing image...' // Initial placeholder
+    timestamp: new Date().toISOString()
   };
   
-  // Start image analysis in the background
-  analyzeImage(imageId, data).catch(err => {
-    console.error('Error analyzing image:', err);
-    dataStore[`image_${imageId}`].analysis = 'Error analyzing image: ' + err.message;
-  });
-  
-  // Respond immediately without waiting for analysis
+  // Redirect to the HTML page that will display the image
   res.status(200).json({ 
     success: true, 
     imageId,
     viewUrl: `${req.protocol}://${req.get('host')}/view-image.html?id=${imageId}`
-  });
-});
-
-// Function to analyze image using OpenAI's GPT-4 Vision
-async function analyzeImage(imageId, base64Data) {
-  try {
-    // Make sure we have an API key
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not set in environment variables');
-    }
-    
-    // Ensure the base64 data has the correct prefix for OpenAI
-    const imageData = base64Data.startsWith('data:') 
-      ? base64Data 
-      : `data:image/png;base64,${base64Data}`;
-    
-    // Call OpenAI API
-    const response = await openai.chat.completions.create({
-      model: "gpt-4-vision-preview",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "What's in this image? Provide a detailed description." },
-            { type: "image_url", image_url: { url: imageData } }
-          ],
-        },
-      ],
-      max_tokens: 300,
-    });
-    
-    // Extract the analysis text
-    const analysisText = response.choices[0]?.message?.content || 'No analysis available';
-    
-    // Update the stored image data with the analysis
-    if (dataStore[`image_${imageId}`]) {
-      dataStore[`image_${imageId}`].analysis = analysisText;
-    }
-    
-    console.log(`Analysis completed for image ${imageId}`);
-    return analysisText;
-  } catch (error) {
-    console.error('Error in image analysis:', error);
-    // Update the stored image with the error
-    if (dataStore[`image_${imageId}`]) {
-      dataStore[`image_${imageId}`].analysis = `Error analyzing image: ${error.message}`;
-    }
-    throw error;
-  }
-}
-
-// Add endpoint to get just the analysis for an image
-app.get('/api/image/:id/analysis', (req, res) => {
-  const { id } = req.params;
-  const imageData = dataStore[`image_${id}`];
-  
-  if (!imageData) {
-    return res.status(404).json({ error: 'Image not found' });
-  }
-  
-  res.status(200).json({ 
-    id,
-    analysis: imageData.analysis || 'Analysis not available',
-    timestamp: imageData.timestamp
   });
 });
 
