@@ -4,6 +4,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
+const { OpenAI } = require('openai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -322,6 +323,331 @@ app.get('/api/gallery', (req, res) => {
   res.status(200).json({ images });
 });
 
+// Add a more robust endpoint for handling base64 images with detailed debugging
+app.post('/api/debug-image', (req, res) => {
+  let rawData = '';
+  
+  req.on('data', chunk => {
+    rawData += chunk.toString();
+  });
+  
+  req.on('end', () => {
+    console.log('DEBUG - Raw data received, length:', rawData.length);
+    console.log('DEBUG - First 100 chars:', rawData.substring(0, 100));
+    
+    if (!rawData || rawData.length === 0) {
+      return res.status(400).json({ error: 'Missing image data' });
+    }
+    
+    // Try to detect the format of the data
+    let imageData = rawData;
+    let detectedFormat = 'unknown';
+    
+    // Check if it's a data URL
+    if (rawData.startsWith('data:')) {
+      detectedFormat = 'data-url';
+      console.log('DEBUG - Detected data URL format');
+      // Already in the right format, no need to modify
+    } 
+    // Check if it's just base64 without the prefix
+    else if (/^[A-Za-z0-9+/=]+$/.test(rawData.substring(0, 100))) {
+      detectedFormat = 'base64-only';
+      console.log('DEBUG - Detected raw base64 format');
+      // Add the data URL prefix
+      imageData = `data:image/png;base64,${rawData}`;
+    }
+    // It might be JSON or something else
+    else {
+      try {
+        const jsonData = JSON.parse(rawData);
+        detectedFormat = 'json';
+        console.log('DEBUG - Detected JSON format:', jsonData);
+        
+        // Try to extract base64 data from JSON
+        if (jsonData.data && typeof jsonData.data === 'string') {
+          if (jsonData.data.startsWith('data:')) {
+            imageData = jsonData.data;
+          } else {
+            imageData = `data:image/png;base64,${jsonData.data}`;
+          }
+        } else {
+          return res.status(400).json({ 
+            error: 'Could not find base64 data in JSON',
+            receivedJson: jsonData
+          });
+        }
+      } catch (e) {
+        console.log('DEBUG - Not valid JSON, treating as raw data');
+        // Not JSON, just use as is and hope for the best
+        imageData = `data:image/png;base64,${rawData}`;
+      }
+    }
+    
+    // Generate a unique ID for this image
+    const imageId = Date.now().toString();
+    
+    // Store the image data
+    dataStore[`image_${imageId}`] = {
+      width: 'auto',
+      height: 'auto',
+      data: imageData,
+      timestamp: new Date().toISOString(),
+      detectedFormat
+    };
+    
+    // Return detailed debug info
+    res.status(200).json({ 
+      success: true, 
+      imageId,
+      detectedFormat,
+      dataLength: rawData.length,
+      viewUrl: `${req.protocol}://${req.get('host')}/view-image.html?id=${imageId}`,
+      debugInfo: {
+        firstChars: rawData.substring(0, 50) + '...',
+        storedDataFirstChars: imageData.substring(0, 50) + '...'
+      }
+    });
+  });
+});
+
+// Add OpenAI integration
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Add a new endpoint that analyzes images with OpenAI Vision
+app.post('/api/analyze-image', async (req, res) => {
+  let rawData = '';
+  
+  req.on('data', chunk => {
+    rawData += chunk.toString();
+  });
+  
+  req.on('end', async () => {
+    console.log('Received data for analysis, length:', rawData.length);
+    
+    if (!rawData || rawData.length === 0) {
+      return res.status(400).json({ error: 'Missing image data' });
+    }
+    
+    // Process the image data to ensure it's in the right format
+    let imageData = rawData;
+    let detectedFormat = 'unknown';
+    
+    // Check if it's a data URL
+    if (rawData.startsWith('data:')) {
+      detectedFormat = 'data-url';
+      // Already in the right format
+    } 
+    // Check if it's just base64 without the prefix
+    else if (/^[A-Za-z0-9+/=]+$/.test(rawData.substring(0, 100))) {
+      detectedFormat = 'base64-only';
+      imageData = `data:image/png;base64,${rawData}`;
+    }
+    // It might be JSON
+    else {
+      try {
+        const jsonData = JSON.parse(rawData);
+        detectedFormat = 'json';
+        
+        if (jsonData.data && typeof jsonData.data === 'string') {
+          if (jsonData.data.startsWith('data:')) {
+            imageData = jsonData.data;
+          } else {
+            imageData = `data:image/png;base64,${jsonData.data}`;
+          }
+        } else {
+          return res.status(400).json({ 
+            error: 'Could not find base64 data in JSON',
+            receivedJson: jsonData
+          });
+        }
+      } catch (e) {
+        // Not JSON, just use as is
+        imageData = `data:image/png;base64,${rawData}`;
+      }
+    }
+    
+    // Generate a unique ID for this image
+    const imageId = Date.now().toString();
+    
+    try {
+      // Call OpenAI API for image analysis
+      console.log('Calling OpenAI API for image analysis...');
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1-2025-04-14",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "What's in this image? Provide a detailed description." },
+              { type: "image_url", image_url: { url: imageData } }
+            ],
+          },
+        ],
+        // max_tokens: 300,
+      });
+      
+      // Extract the analysis text
+      const analysisText = response.choices[0]?.message?.content || 'No analysis available';
+      console.log('Analysis received:', analysisText);
+      
+      // Store the image data with the analysis
+      dataStore[`image_${imageId}`] = {
+        width: 'auto',
+        height: 'auto',
+        data: imageData,
+        timestamp: new Date().toISOString(),
+        analysis: analysisText,
+        detectedFormat
+      };
+      
+      // Return the image info with analysis
+      res.status(200).json({ 
+        success: true, 
+        imageId,
+        analysis: analysisText,
+        viewUrl: `${req.protocol}://${req.get('host')}/view-image.html?id=${imageId}`
+      });
+      
+    } catch (error) {
+      console.error('Error analyzing image with OpenAI:', error);
+      
+      // Store the image data without analysis
+      dataStore[`image_${imageId}`] = {
+        width: 'auto',
+        height: 'auto',
+        data: imageData,
+        timestamp: new Date().toISOString(),
+        analysis: `Error analyzing image: ${error.message}`,
+        detectedFormat
+      };
+      
+      // Return error but still provide the image URL
+      res.status(200).json({ 
+        success: true,
+        imageId,
+        error: `Error analyzing image: ${error.message}`,
+        viewUrl: `${req.protocol}://${req.get('host')}/view-image.html?id=${imageId}`
+      });
+    }
+  });
+});
+
+// Add a new endpoint that returns a random text summary and image links
+app.get('/api/get-summary', (req, res) => {
+  // Array of possible random summaries
+  const summaries = [
+    "A collection of small images perfect for web design projects. These compact visuals can be used for icons, thumbnails, or decorative elements on your website.",
+    "Explore our curated selection of small-sized images. Ideal for projects where file size matters but quality is still important.",
+    "Minimalist images that pack a visual punch despite their small dimensions. Great for mobile-first design approaches.",
+    "A variety of small PNG and JPEG images that load quickly and efficiently. Perfect for optimizing website performance.",
+    "Compact visuals for your next creative project. These small images are versatile and can be used across multiple platforms."
+  ];
+  
+  // Image links from the provided URLs
+  const imageLinks = [
+    "https://png.pngtree.com/png-vector/20191121/ourmid/pngtree-blue-bird-vector-or-color-illustration-png-image_2013004.jpg",
+    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCYM8ihwZPidLr5bL8MMlmHSj2KzDnp_vfDw&s"
+  ];
+  
+  // Select a random summary
+  const randomSummary = summaries[Math.floor(Math.random() * summaries.length)];
+  
+  // Return the summary and image links
+  res.status(200).json({
+    success: true,
+    summary: randomSummary,
+    imageLinks: imageLinks,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Add an endpoint to store text and display it
+app.put('/api/put-voice', (req, res) => {
+  let rawData = '';
+  
+  req.on('data', chunk => {
+    rawData += chunk.toString();
+  });
+  
+  req.on('end', () => {
+    console.log('Received text data, length:', rawData.length);
+    
+    if (!rawData || rawData.length === 0) {
+      return res.status(400).json({ error: 'Missing text data' });
+    }
+    
+    // Try to parse as JSON if it looks like JSON
+    let textContent = rawData;
+    let textTitle = 'Text Display';
+    
+    try {
+      if (rawData.trim().startsWith('{')) {
+        const jsonData = JSON.parse(rawData);
+        if (jsonData.text) {
+          textContent = jsonData.text;
+        }
+        if (jsonData.title) {
+          textTitle = jsonData.title;
+        }
+      }
+    } catch (e) {
+      // Not valid JSON, use as plain text
+      console.log('Not valid JSON, using as plain text');
+    }
+    
+    // Generate a unique ID for this text
+    const textId = Date.now().toString();
+    
+    // Store the text data
+    dataStore[`text_${textId}`] = {
+      content: textContent,
+      title: textTitle,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Return the text info
+    res.status(200).json({ 
+      success: true, 
+      textId,
+      viewUrl: `${req.protocol}://${req.get('host')}/display-text.html?id=${textId}`
+    });
+  });
+});
+
+// API endpoint to get the stored text data
+app.get('/api/text/:id', (req, res) => {
+  const { id } = req.params;
+  const textData = dataStore[`text_${id}`];
+  
+  if (!textData) {
+    return res.status(404).json({ error: 'Text not found' });
+  }
+  
+  res.status(200).json(textData);
+});
+
+// Add endpoint to get all stored texts
+app.get('/api/texts', (req, res) => {
+  const texts = [];
+  
+  // Extract all text entries from the dataStore
+  Object.keys(dataStore).forEach(key => {
+    if (key.startsWith('text_')) {
+      const id = key.replace('text_', '');
+      texts.push({
+        id,
+        content: dataStore[key].content,
+        timestamp: dataStore[key].timestamp
+      });
+    }
+  });
+  
+  res.status(200).json({ texts });
+});
+
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -330,7 +656,10 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`Images API: http://localhost:${PORT}/api/images`);
+  console.log(`Text API: http://localhost:${PORT}/api/get-text`);
+  console.log(`Text Input Form: http://localhost:${PORT}/text-input.html`);
   console.log(`DAIN Image API: http://localhost:${PORT}/api/dain/image?filename=example.png`);
+  console.log(`Base64 Image API: http://localhost:${PORT}/api/base64-image`);
   console.log(`Static images: http://localhost:${PORT}/images/[filename]`);
   console.log(`Image Gallery: http://localhost:${PORT}/gallery.html`);
 }); 

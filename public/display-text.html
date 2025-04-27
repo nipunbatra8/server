@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Display</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .text-container {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 20px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .info {
+      margin-bottom: 20px;
+      color: #666;
+      text-align: center;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+      text-align: center;
+    }
+    .navigation {
+      margin-top: 30px;
+      text-align: center;
+    }
+    .navigation a {
+      margin: 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Text Display</h1>
+  <div class="info">Displaying stored text content</div>
+  <div id="error-message" class="error" style="display: none;"></div>
+  <div id="text-container" class="text-container"></div>
+  
+  <div class="navigation">
+    <a href="/text-gallery.html">Back to Gallery</a>
+    <a href="/text-input.html">Add New Text</a>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const params = new URLSearchParams(window.location.search);
+      const textId = params.get('id');
+      
+      if (!textId) {
+        showError('No text ID provided');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/text/${textId}`);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          showError(`Error: ${errorData.error || 'Failed to load text'}`);
+          return;
+        }
+        
+        const textData = await response.json();
+        
+        // Update the title
+        document.title = 'Text Display';
+        
+        // Display the text content
+        const textContainer = document.getElementById('text-container');
+        textContainer.textContent = textData.content;
+        
+        // Add timestamp info
+        const infoDiv = document.querySelector('.info');
+        infoDiv.innerHTML += `<br>Created: ${new Date(textData.timestamp).toLocaleString()}`;
+        
+      } catch (error) {
+        showError(`Error: ${error.message}`);
+      }
+    });
+    
+    function showError(message) {
+      const errorElement = document.getElementById('error-message');
+      errorElement.textContent = message;
+      errorElement.style.display = 'block';
+      document.getElementById('text-container').style.display = 'none';
+    }
+  </script>
+</body>
+</html> 

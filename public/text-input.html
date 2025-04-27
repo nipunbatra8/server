@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Input</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      height: 200px;
+      font-family: inherit;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+    .view-gallery {
+      display: block;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Text Input</h1>
+  
+  <div class="form-group">
+    <label for="text-input">Enter Your Text:</label>
+    <textarea id="text-input" placeholder="Type your text here..."></textarea>
+  </div>
+  
+  <div class="form-group">
+    <button id="submit-text">Submit Text</button>
+  </div>
+  
+  <a href="/text-gallery.html" class="view-gallery">View Text Gallery</a>
+  
+  <div class="result" id="result" style="display: none;"></div>
+  
+  <script>
+    document.getElementById('submit-text').addEventListener('click', async function() {
+      const text = document.getElementById('text-input').value.trim();
+      
+      if (!text) {
+        alert('Please enter some text');
+        return;
+      }
+      
+      document.getElementById('result').textContent = 'Submitting text...';
+      document.getElementById('result').style.display = 'block';
+      
+      try {
+        const response = await fetch('/api/get-text', {
+          method: 'PUT',
+          body: JSON.stringify({
+            text: text
+          })
+        });
+        
+        const result = await response.json();
+        document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+        
+        if (result.success) {
+          // Add success message and links
+          document.getElementById('result').innerHTML = 
+            `Text submitted successfully!<br><br>` +
+            `<a href="${result.viewUrl}" target="_blank">View this text</a><br>` +
+            `<a href="/text-gallery.html">View all texts in gallery</a>`;
+          
+          // Clear the input
+          document.getElementById('text-input').value = '';
+        }
+      } catch (error) {
+        document.getElementById('result').textContent = 'Error: ' + error.message;
+      }
+    });
+  </script>
+</body>
+</html> 

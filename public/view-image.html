@@ -26,6 +26,21 @@
       margin-bottom: 20px;
       color: #666;
     }
+    .analysis {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+      text-align: left;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .analysis-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -34,6 +49,11 @@
   <div id="error-message" class="error" style="display: none;"></div>
   <div id="image-container" class="image-container">
     <img id="display-image" alt="Base64 Image">
+  </div>
+  
+  <div id="analysis-container" class="analysis" style="display: none;">
+    <div class="analysis-title">AI Analysis:</div>
+    <div id="analysis-content"></div>
   </div>
   
   <script>
@@ -68,6 +88,15 @@
         // Add timestamp info
         const infoDiv = document.querySelector('.info');
         infoDiv.innerHTML += `<br>Uploaded: ${new Date(imageData.timestamp).toLocaleString()}`;
+        
+        // Display analysis if available
+        if (imageData.analysis) {
+          const analysisContainer = document.getElementById('analysis-container');
+          const analysisContent = document.getElementById('analysis-content');
+          
+          analysisContent.textContent = imageData.analysis;
+          analysisContainer.style.display = 'block';
+        }
       } catch (error) {
         showError(`Error: ${error.message}`);
       }
@@ -78,6 +107,7 @@
       errorElement.textContent = message;
       errorElement.style.display = 'block';
       document.getElementById('image-container').style.display = 'none';
+      document.getElementById('analysis-container').style.display = 'none';
     }
   </script>
 </body>
