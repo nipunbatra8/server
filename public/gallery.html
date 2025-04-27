@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Gallery with AI Analysis</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .image-card {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .image-card img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto 10px;
+    }
+    .image-info {
+      font-size: 14px;
+      color: #666;
+      margin-top: 10px;
+    }
+    .image-analysis {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .analysis-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+    }
+    .no-images {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+      padding: 50px;
+    }
+    .refresh-btn {
+      display: block;
+      margin: 0 auto 20px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .refresh-btn:hover {
+      background-color: #45a049;
+    }
+    .loading {
+      font-style: italic;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <h1>Image Gallery with AI Analysis</h1>
+  <button class="refresh-btn" onclick="loadImages()">Refresh Gallery</button>
+  <div id="gallery" class="gallery">
+    <div class="no-images">Loading images...</div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', loadImages);
+
+    async function loadImages() {
+      try {
+        const response = await fetch('/api/gallery');
+        
+        if (!response.ok) {
+          throw new Error('Failed to load images');
+        }
+        
+        const data = await response.json();
+        const galleryElement = document.getElementById('gallery');
+        
+        if (!data.images || data.images.length === 0) {
+          galleryElement.innerHTML = '<div class="no-images">No images have been uploaded yet.</div>';
+          return;
+        }
+        
+        galleryElement.innerHTML = '';
+        
+        data.images.forEach(image => {
+          const card = document.createElement('div');
+          card.className = 'image-card';
+          card.id = `card-${image.id}`;
+          
+          const img = document.createElement('img');
+          img.src = image.data.startsWith('data:') ? image.data : `data:image/png;base64,${image.data}`;
+          img.alt = 'Uploaded image';
+          if (image.width) img.style.width = isNaN(image.width) ? image.width : `${image.width}px`;
+          if (image.height) img.style.height = isNaN(image.height) ? image.height : `${image.height}px`;
+          
+          const info = document.createElement('div');
+          info.className = 'image-info';
+          info.innerHTML = `
+            <div>ID: ${image.id}</div>
+            <div>Uploaded: ${new Date(image.timestamp).toLocaleString()}</div>
+            <div><a href="/view-image.html?id=${image.id}" target="_blank">View full image</a></div>
+          `;
+          
+          const analysis = document.createElement('div');
+          analysis.className = 'image-analysis';
+          analysis.innerHTML = `
+            <div class="analysis-title">AI Analysis:</div>
+            <div id="analysis-${image.id}" class="analysis-content">
+              ${image.analysis || '<span class="loading">Analyzing image...</span>'}
+            </div>
+          `;
+          
+          card.appendChild(img);
+          card.appendChild(info);
+          card.appendChild(analysis);
+          galleryElement.appendChild(card);
+          
+          // If analysis is still in progress, poll for updates
+          if (!image.analysis || image.analysis === 'Analyzing image...') {
+            pollForAnalysis(image.id);
+          }
+        });
+      } catch (error) {
+        console.error('Error loading images:', error);
+        document.getElementById('gallery').innerHTML = `
+          <div class="no-images">Error loading images: ${error.message}</div>
+        `;
+      }
+    }
+    
+    // Function to poll for analysis updates
+    async function pollForAnalysis(imageId) {
+      try {
+        const response = await fetch(`/api/image/${imageId}/analysis`);
+        if (!response.ok) {
+          throw new Error('Failed to get analysis');
+        }
+        
+        const data = await response.json();
+        const analysisElement = document.getElementById(`analysis-${imageId}`);
+        
+        if (analysisElement) {
+          // Update the analysis text
+          analysisElement.textContent = data.analysis;
+          
+          // If still analyzing, poll again after a delay
+          if (data.analysis === 'Analyzing image...') {
+            setTimeout(() => pollForAnalysis(imageId), 3000);
+          }
+        }
+      } catch (error) {
+        console.error(`Error polling for analysis of image ${imageId}:`, error);
+        const analysisElement = document.getElementById(`analysis-${imageId}`);
+        if (analysisElement) {
+          analysisElement.textContent = `Error getting analysis: ${error.message}`;
+        }
+      }
+    }
+  </script>
+</body>
+</html> 
